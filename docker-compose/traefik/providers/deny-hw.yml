@@ -1,0 +1,5 @@
+http:
+  middlewares:
+    deny-hw:
+      headers:
+        permissionsPolicy: "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"

@@ -1,0 +1,8 @@
+http:
+  middlewares:
+    ratelimit:
+      rateLimit:
+        average: 200
+        burst: 300
+        sourceCriterion:
+          requestHeaderName: CF-Connecting-IP

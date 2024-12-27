@@ -1,0 +1,121 @@
+services:
+  traefik:
+    image: "traefik:v3.2.3"
+    container_name: "traefik"
+    restart: "always"
+    networks:
+      - traefik
+      - prometheus
+    env_file:
+      - .env
+    command:
+      # Lembre-se de comentar novamente após o debugging
+      # - "--log.level=DEBUG"
+
+      # Matenha api.insecure=false para não expor a API do Traefik
+      - "--api.insecure=false"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      # Mantenha exposedbydefault=false para que o Traefik não exponha todos os containers automaticamente
+      # Dessa forma, apenas os containers com a label traefik.enable=true serão expostos
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/providers"
+
+      # Setup HTTP
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http3"
+      ## Sempre redireciona para HTTPS
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      ## Middlewares comuns para todos os serviços
+      - "--entrypoints.web.http.middlewares=compress@file, ratelimit@file, security-headers@file"
+
+      # Setup HTTPS
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.websecure.http3"
+      ## Middlewares comuns para todos os serviços
+      - "--entryPoints.websecure.http.middlewares=compress@file, ratelimit@file, security-headers@file"
+      # https://github.com/traefik/traefik/wiki/respondingTimeouts-for-applications
+      - "--entrypoints.websecure.transport.respondingTimeouts.readTimeout=0s"
+
+      # Métricas para o Grafana
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.buckets=0.100000, 0.300000, 1.200000, 5.000000"
+      - "--metrics.prometheus.addEntryPointsLabels=true"
+      - "--metrics.prometheus.addServicesLabels=true"
+      - "--entryPoints.metrics.address=:8899"
+      - "--metrics.prometheus.entryPoint=metrics"
+
+      # Precisa ser DNS Challenge, pois o proxy do Cloudflare não deixa o HTTP Challenge funcionar
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare"
+      - "--certificatesresolvers.letsencrypt.acme.email=letsencrypt@yudi.me"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+
+      # Plugins
+      ## Crowdsec - Proteção contra ataques
+      - "--experimental.plugins.crowdsec-bouncer-traefik-plugin.modulename=github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
+      - "--experimental.plugins.crowdsec-bouncer-traefik-plugin.version=v1.3.5"
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./letsencrypt:/letsencrypt"
+      - "./providers:/providers"
+      - "/home/shared/docker-data/crowdsec/traefikLogs:/var/log/traefik"
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+
+    labels:
+      - "traefik.enable=true"
+
+      # Dashboard
+      - "traefik.http.routers.dashboard.entryPoints=websecure"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.cacic.dev.br`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.tls.certResolver=letsencrypt"
+      - "traefik.http.routers.dashboard.tls.domains=traefik.cacic.dev.br"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=8080"
+      - "traefik.http.routers.dashboard.middlewares=authentik@docker, dashboard-redirect"
+      ## Redirect acesso sem path para /dashboard
+      - "traefik.http.middlewares.dashboard-redirect.redirectregex.regex=^https://traefik.cacic.dev.br$$"
+      - "traefik.http.middlewares.dashboard-redirect.redirectregex.replacement=https://traefik.cacic.dev.br/dashboard"
+      - "traefik.http.middlewares.dashboard-redirect.redirectregex.permanent=true"
+
+      # Negar acesso direto pelo IP
+      - "traefik.http.routers.unespEntryPointIp.rule=Host(`200.145.181.38`)"
+      - "traefik.http.routers.unespEntryPointIp.entrypoints=web, websecure"
+      - "traefik.http.routers.unespEntryPointIp.tls.options=directIp@file"
+
+      # Redirect 38a.fct.unesp.br e fctdtiwebxp01.cacic.dev.br para a documentação do servidor
+      - "traefik.http.routers.unespEntryPoint.rule=Host(`38a.fct.unesp.br`) || Host(`fctdtiwebxp01.cacic.dev.br`)"
+      - "traefik.http.routers.unespEntryPoint.middlewares=unespEntryPoint-dos, unespEntryPoint-dos-req, redirectToDocs"
+      - "traefik.http.routers.unespEntryPoint.entrypoints=web, websecure"
+      - "traefik.http.middlewares.redirectToDocs.redirectregex.regex=.*"
+      - "traefik.http.middlewares.redirectToDocs.redirectregex.replacement=https://cacic.dev.br/docs/Recursos/Servidores/FCTDTIWEBXP01"
+      - "traefik.http.routers.unespEntryPoint.tls.certResolver=letsencrypt"
+      - "traefik.http.routers.unespEntryPoint.tls.domains=fctdtiwebxp01.cacic.dev.br"
+      ## Rate limit, por excesso de cautela
+      - "traefik.http.middlewares.unespEntryPoint-dos-req.inflightreq.amount=3"
+      - "traefik.http.middlewares.unespEntryPoint-dos.ratelimit.average=3"
+      - "traefik.http.middlewares.unespEntryPoint-dos.ratelimit.burst=3"
+      - "traefik.http.middlewares.unespEntryPoint-dos.ratelimit.sourcecriterion.requestheadername=X-Forwarded-Host"
+
+      # Redirect live.cacic.dev.br para cacic.dev.br
+      - "traefik.http.routers.liveEntryPoint.rule=Host(`live.cacic.dev.br`)"
+      - "traefik.http.routers.liveEntryPoint.middlewares=redirectLive"
+      - "traefik.http.middlewares.redirectLive.redirectregex.regex=.*"
+      - "traefik.http.middlewares.redirectLive.redirectregex.replacement=https://cacic.dev.br/live"
+      - "traefik.http.middlewares.redirectLive.redirectregex.permanent=true"
+      - "traefik.http.routers.liveEntryPoint.entrypoints=web, websecure"
+
+networks:
+  traefik:
+    external: true
+  prometheus:
+    external: true

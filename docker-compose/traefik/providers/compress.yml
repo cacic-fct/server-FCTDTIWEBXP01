@@ -1,0 +1,13 @@
+http:
+  middlewares:
+    compress:
+      compress:
+        defaultEncoding: zstd
+        minResponseBodyBytes: 0
+        includedContentTypes:
+          - application/json
+          - text/html
+          - text/plain
+          - application/xml
+          - image/svg+xml
+          - application/x-httpd-php
