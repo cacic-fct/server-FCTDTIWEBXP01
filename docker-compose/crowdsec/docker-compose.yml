@@ -1,0 +1,28 @@
+services:
+  crowdsec:
+    image: crowdsecurity/crowdsec
+    container_name: crowdsec
+    environment:
+      PGID: "1000"
+      COLLECTIONS: >
+        crowdsecurity/traefik
+        crowdsecurity/http-cve
+        crowdsecurity/appsec-virtual-patching
+        crowdsecurity/appsec-generic-rules
+        crowdsecurity/http-dos
+        crowdsecurity/discord-crawler-whitelist
+        crowdsecurity/base-http-scenarios
+        firix/authentik
+    volumes:
+      - /home/shared/docker-data/crowdsec/var/log/crowdsec:/var/log/crowdsec:ro
+      - /home/shared/docker-data/crowdsec/opt/crowdsec-db:/var/lib/crowdsec/data
+      - /home/shared/docker-data/crowdsec/var/log/auth.log:/var/log/auth.log:ro
+      - /home/shared/docker-data/crowdsec/opt/crowdsec:/etc/crowdsec
+      - /home/shared/docker-data/crowdsec/traefikLogs:/var/log/traefik:ro
+    restart: unless-stopped
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true

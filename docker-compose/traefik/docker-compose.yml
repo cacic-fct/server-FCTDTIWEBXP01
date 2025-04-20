@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: "traefik:v3.3.2"
+    image: "traefik:v3.3.6"
     container_name: "traefik"
     restart: "always"
     networks:
@@ -23,7 +23,6 @@ services:
 
       # Setup HTTP
       - "--entrypoints.web.address=:80"
-      - "--entrypoints.web.http3"
       ## Sempre redireciona para HTTPS
       - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
       ## Middlewares comuns para todos os serviços
@@ -31,6 +30,7 @@ services:
 
       # Setup HTTPS
       - "--entrypoints.websecure.address=:443"
+      ## HTTP/3
       - "--entrypoints.websecure.http3"
       ## Middlewares comuns para todos os serviços
       - "--entryPoints.websecure.http.middlewares=compress@file, ratelimit@file, security-headers@file, crowdsec@file"
@@ -60,7 +60,7 @@ services:
       - "--accesslog"
       - "--accesslog.filepath=/var/log/traefik/access.log"
       - "--experimental.plugins.crowdsec-bouncer-traefik-plugin.modulename=github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin"
-      - "--experimental.plugins.crowdsec-bouncer-traefik-plugin.version=v1.3.5"
+      - "--experimental.plugins.crowdsec-bouncer-traefik-plugin.version=v1.4.2"
 
     ports:
       - "80:80"
@@ -71,6 +71,7 @@ services:
       - "./letsencrypt:/letsencrypt"
       - "./providers:/providers"
       - "/home/shared/docker-data/crowdsec/traefikLogs:/var/log/traefik"
+      - "/home/shared/docker-compose/cacic-error-pages/html:/error-pages"
 
     logging:
       driver: "json-file"

@@ -1,0 +1,9 @@
+tls:
+  options:
+    default:
+      # Require TLS 1.3 minimum
+      minVersion: VersionTLS13
+    # Disallow direct IP access
+    # https://github.com/traefik/traefik/issues/5507
+    directIp:
+      sniStrict: true

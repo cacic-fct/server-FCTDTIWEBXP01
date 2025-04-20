@@ -1,5 +1,0 @@
-# https://github.com/traefik/traefik/issues/5507
-tls:
-  options:
-    directIp:
-      sniStrict: true
